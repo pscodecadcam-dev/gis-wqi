@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GIS WQI — ระบบข้อมูลน้ำเสียชุมชน</title>
+
+  <!-- Google Fonts: Prompt -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { prompt: ['Prompt', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="font-prompt bg-sky-50 min-h-screen flex flex-col">
+
+  <!-- ========================================
+       HEADER
+       ======================================== -->
+  <header class="bg-gradient-to-r from-sky-600 to-sky-700 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3">
+        <div class="bg-white/20 rounded-xl p-2">
+          <i data-lucide="droplets" class="w-7 h-7"></i>
+        </div>
+        <div>
+          <h1 class="text-xl md:text-2xl font-bold tracking-tight">ระบบข้อมูลน้ำเสียชุมชน</h1>
+          <p class="text-sky-200 text-xs md:text-sm">GIS WQI — Wastewater Data Collection</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <button id="btn-export-menu" class="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition text-sm font-medium">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            Export
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </button>
+          <div id="export-dropdown" class="hidden absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+            <button id="btn-export-source-geojson" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-sky-50 flex items-center gap-2 transition">
+              <i data-lucide="map-pin" class="w-4 h-4 text-sky-500"></i>
+              แหล่งกำเนิด (GeoJSON)
+            </button>
+            <button id="btn-export-pipe-geojson" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-sky-50 flex items-center gap-2 transition">
+              <i data-lucide="git-commit-horizontal" class="w-4 h-4 text-amber-700"></i>
+              ท่อระบายน้ำ (GeoJSON)
+            </button>
+            <hr class="border-gray-100">
+            <button id="btn-export-source-csv" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-sky-50 flex items-center gap-2 transition">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-500"></i>
+              แหล่งกำเนิด (CSV)
+            </button>
+            <button id="btn-export-pipe-csv" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-sky-50 flex items-center gap-2 transition">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4 text-amber-700"></i>
+              ท่อระบายน้ำ (CSV)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================
+       TAB NAVIGATION
+       ======================================== -->
+  <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex gap-1" id="tab-nav">
+        <button class="tab-btn active" data-tab="sources">
+          <i data-lucide="map-pin" class="w-4 h-4"></i>
+          <span>แหล่งกำเนิดน้ำเสีย</span>
+        </button>
+        <button class="tab-btn" data-tab="pipes">
+          <i data-lucide="git-commit-horizontal" class="w-4 h-4"></i>
+          <span>ท่อระบายน้ำ</span>
+        </button>
+        <button class="tab-btn" data-tab="map">
+          <i data-lucide="map" class="w-4 h-4"></i>
+          <span>แผนที่</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ========================================
+       MAIN CONTENT
+       ======================================== -->
+  <main class="flex-1">
+
+    <!-- ====== TAB 1: แหล่งกำเนิดน้ำเสีย ====== -->
+    <section id="tab-sources" class="tab-content active">
+      <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+        <!-- Form Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="bg-gradient-to-r from-sky-500 to-sky-600 px-6 py-4">
+            <h2 class="text-white font-semibold text-lg flex items-center gap-2">
+              <i data-lucide="plus-circle" class="w-5 h-5"></i>
+              <span id="source-form-title">เพิ่มข้อมูลแหล่งกำเนิดน้ำเสีย</span>
+            </h2>
+          </div>
+          <form id="source-form" class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <!-- ws_id -->
+              <div class="form-group">
+                <label class="form-label" for="ws-id">
+                  <i data-lucide="hash" class="w-4 h-4"></i> รหัสแหล่งกำเนิด (ws_id)
+                </label>
+                <input type="text" id="ws-id" class="form-input bg-gray-50" readonly placeholder="สร้างอัตโนมัติ...">
+                <input type="hidden" id="ws-edit-mode" value="">
+              </div>
+              <!-- ws_type -->
+              <div class="form-group">
+                <label class="form-label" for="ws-type">
+                  <i data-lucide="tag" class="w-4 h-4"></i> ประเภท (ws_type) <span class="text-red-400">*</span>
+                </label>
+                <select id="ws-type" class="form-input" required>
+                  <option value="">-- เลือกประเภท --</option>
+                  <option value="1">1 — บ้านพักอาศัย</option>
+                  <option value="2">2 — อาคารพาณิชย์</option>
+                  <option value="3">3 — ตลาด</option>
+                  <option value="4">4 — ร้านอาหาร</option>
+                  <option value="5">5 — หอพัก</option>
+                  <option value="6">6 — สถานประกอบกิจการอันตรายต่อสุขภาพ</option>
+                  <option value="7">7 — อื่นๆ</option>
+                </select>
+              </div>
+              <!-- latitude -->
+              <div class="form-group">
+                <label class="form-label" for="ws-lat">
+                  <i data-lucide="navigation" class="w-4 h-4"></i> ละติจูด (Latitude) <span class="text-red-400">*</span>
+                </label>
+                <input type="number" id="ws-lat" class="form-input" step="any" placeholder="เช่น 13.7563" required>
+              </div>
+              <!-- longitude + map pick button -->
+              <div class="form-group">
+                <label class="form-label" for="ws-lng">
+                  <i data-lucide="navigation" class="w-4 h-4"></i> ลองจิจูด (Longitude) <span class="text-red-400">*</span>
+                </label>
+                <div class="flex gap-2">
+                  <input type="number" id="ws-lng" class="form-input flex-1" step="any" placeholder="เช่น 100.5018" required>
+                  <button type="button" id="btn-pick-source-loc" class="btn-map-pick" title="เลือกจากแผนที่">
+                    <i data-lucide="crosshair" class="w-5 h-5"></i>
+                  </button>
+                </div>
+              </div>
+              <!-- pop_num -->
+              <div class="form-group">
+                <label class="form-label" for="ws-pop">
+                  <i data-lucide="users" class="w-4 h-4"></i> จำนวนผู้พักอาศัย (pop_num) <span class="text-red-400">*</span>
+                </label>
+                <input type="number" id="ws-pop" class="form-input" min="1" placeholder="จำนวนคน" required>
+              </div>
+              <!-- ww_q -->
+              <div class="form-group">
+                <label class="form-label" for="ws-wwq">
+                  <i data-lucide="droplets" class="w-4 h-4"></i> ปริมาณน้ำเสีย (ww_q) ลิตร/วัน <span class="text-red-400">*</span>
+                </label>
+                <input type="number" id="ws-wwq" class="form-input" min="0" step="any" placeholder="ลิตรต่อวัน" required>
+              </div>
+            </div>
+            <div class="flex gap-3 mt-6 pt-5 border-t border-gray-100">
+              <button type="submit" id="btn-save-source" class="btn-primary">
+                <i data-lucide="save" class="w-4 h-4"></i> บันทึก
+              </button>
+              <button type="button" id="btn-clear-source" class="btn-secondary">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i> ล้างฟอร์ม
+              </button>
+              <button type="button" id="btn-cancel-source-edit" class="btn-secondary hidden">
+                <i data-lucide="x" class="w-4 h-4"></i> ยกเลิกแก้ไข
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Data Table Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 class="font-semibold text-gray-800 flex items-center gap-2">
+              <i data-lucide="table-2" class="w-5 h-5 text-sky-500"></i>
+              ข้อมูลที่บันทึกแล้ว
+              <span id="source-count" class="text-sm text-gray-400 font-normal">(0 รายการ)</span>
+            </h2>
+            <button id="btn-refresh-sources" class="text-sky-500 hover:text-sky-700 transition p-2 rounded-lg hover:bg-sky-50" title="รีเฟรช">
+              <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>รหัส</th>
+                  <th>ประเภท</th>
+                  <th>ละติจูด</th>
+                  <th>ลองจิจูด</th>
+                  <th>จำนวนคน</th>
+                  <th>น้ำเสีย (ล./วัน)</th>
+                  <th>วันที่บันทึก</th>
+                  <th class="text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="source-tbody">
+                <tr><td colspan="8" class="text-center text-gray-400 py-8">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== TAB 2: ท่อระบายน้ำ ====== -->
+    <section id="tab-pipes" class="tab-content hidden">
+      <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+        <!-- Form Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="bg-gradient-to-r from-amber-600 to-amber-700 px-6 py-4">
+            <h2 class="text-white font-semibold text-lg flex items-center gap-2">
+              <i data-lucide="plus-circle" class="w-5 h-5"></i>
+              <span id="pipe-form-title">เพิ่มข้อมูลท่อระบายน้ำ</span>
+            </h2>
+          </div>
+          <form id="pipe-form" class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <!-- wd_id -->
+              <div class="form-group">
+                <label class="form-label" for="wd-id">
+                  <i data-lucide="hash" class="w-4 h-4"></i> รหัสท่อระบายน้ำ (wd_id)
+                </label>
+                <input type="text" id="wd-id" class="form-input bg-gray-50" readonly placeholder="สร้างอัตโนมัติ...">
+                <input type="hidden" id="wd-edit-mode" value="">
+              </div>
+              <!-- latitude -->
+              <div class="form-group">
+                <label class="form-label" for="wd-lat">
+                  <i data-lucide="navigation" class="w-4 h-4"></i> ละติจูด (Latitude) <span class="text-red-400">*</span>
+                </label>
+                <input type="number" id="wd-lat" class="form-input" step="any" placeholder="เช่น 13.7563" required>
+              </div>
+              <!-- longitude + map pick -->
+              <div class="form-group">
+                <label class="form-label" for="wd-lng">
+                  <i data-lucide="navigation" class="w-4 h-4"></i> ลองจิจูด (Longitude) <span class="text-red-400">*</span>
+                </label>
+                <div class="flex gap-2">
+                  <input type="number" id="wd-lng" class="form-input flex-1" step="any" placeholder="เช่น 100.5018" required>
+                  <button type="button" id="btn-pick-pipe-loc" class="btn-map-pick" title="เลือกจากแผนที่">
+                    <i data-lucide="crosshair" class="w-5 h-5"></i>
+                  </button>
+                </div>
+              </div>
+              <!-- pip_area -->
+              <div class="form-group">
+                <label class="form-label" for="wd-area">
+                  <i data-lucide="circle" class="w-4 h-4"></i> พื้นที่หน้าตัดท่อ (pip_area) ตร.ม. <span class="text-red-400">*</span>
+                </label>
+                <input type="number" id="wd-area" class="form-input" min="0" step="any" placeholder="ตารางเมตร" required>
+              </div>
+              <!-- wd_distance -->
+              <div class="form-group">
+                <label class="form-label" for="wd-distance">
+                  <i data-lucide="ruler" class="w-4 h-4"></i> ความยาว (wd_distance) เมตร <span class="text-red-400">*</span>
+                </label>
+                <input type="number" id="wd-distance" class="form-input" min="0" step="any" placeholder="เมตร" required>
+              </div>
+              <!-- ww_qav -->
+              <div class="form-group">
+                <label class="form-label" for="wd-qav">
+                  <i data-lucide="droplets" class="w-4 h-4"></i> น้ำเสียเฉลี่ย (ww_qav) ลิตร/วัน <span class="text-red-400">*</span>
+                </label>
+                <input type="number" id="wd-qav" class="form-input" min="0" step="any" placeholder="ลิตรต่อวัน" required>
+              </div>
+            </div>
+            <div class="flex gap-3 mt-6 pt-5 border-t border-gray-100">
+              <button type="submit" id="btn-save-pipe" class="btn-primary bg-amber-600 hover:bg-amber-700">
+                <i data-lucide="save" class="w-4 h-4"></i> บันทึก
+              </button>
+              <button type="button" id="btn-clear-pipe" class="btn-secondary">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i> ล้างฟอร์ม
+              </button>
+              <button type="button" id="btn-cancel-pipe-edit" class="btn-secondary hidden">
+                <i data-lucide="x" class="w-4 h-4"></i> ยกเลิกแก้ไข
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Data Table Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 class="font-semibold text-gray-800 flex items-center gap-2">
+              <i data-lucide="table-2" class="w-5 h-5 text-amber-600"></i>
+              ข้อมูลที่บันทึกแล้ว
+              <span id="pipe-count" class="text-sm text-gray-400 font-normal">(0 รายการ)</span>
+            </h2>
+            <button id="btn-refresh-pipes" class="text-amber-600 hover:text-amber-700 transition p-2 rounded-lg hover:bg-amber-50" title="รีเฟรช">
+              <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>รหัส</th>
+                  <th>ละติจูด</th>
+                  <th>ลองจิจูด</th>
+                  <th>พื้นที่ (ตร.ม.)</th>
+                  <th>ความยาว (ม.)</th>
+                  <th>น้ำเสีย (ล./วัน)</th>
+                  <th>วันที่บันทึก</th>
+                  <th class="text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="pipe-tbody">
+                <tr><td colspan="8" class="text-center text-gray-400 py-8">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== TAB 3: แผนที่ ====== -->
+    <section id="tab-map" class="tab-content hidden">
+      <div class="relative">
+        <div id="main-map" class="w-full" style="height: calc(100vh - 130px);"></div>
+        <!-- Map Legend -->
+        <div id="map-legend" class="absolute bottom-6 left-4 bg-white/95 backdrop-blur rounded-xl shadow-lg p-4 z-[1000] text-sm max-w-xs">
+          <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-1">
+            <i data-lucide="palette" class="w-4 h-4"></i> คำอธิบายสัญลักษณ์
+          </h3>
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> บ้านพักอาศัย</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500 inline-block"></span> อาคารพาณิชย์</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500 inline-block"></span> ตลาด</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span> ร้านอาหาร</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-purple-500 inline-block"></span> หอพัก</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span> สถานประกอบกิจการฯ</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-gray-500 inline-block"></span> อื่นๆ</div>
+            <hr class="my-1.5 border-gray-200">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-amber-800 inline-block"></span> ท่อระบายน้ำ</div>
+          </div>
+        </div>
+        <!-- Fit All Button -->
+        <button id="btn-fit-all" class="absolute top-4 right-4 bg-white shadow-lg rounded-lg px-4 py-2 z-[1000] text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition">
+          <i data-lucide="maximize" class="w-4 h-4"></i> แสดงทั้งหมด
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ========================================
+       MAP PICKER MODAL
+       ======================================== -->
+  <div id="map-modal" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="font-semibold text-lg flex items-center gap-2">
+          <i data-lucide="crosshair" class="w-5 h-5 text-sky-500"></i>
+          เลือกพิกัดจากแผนที่
+        </h3>
+        <button id="btn-modal-close" class="text-gray-400 hover:text-gray-600 transition">
+          <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+      </div>
+      <div id="mini-map" class="w-full" style="height: 400px;"></div>
+      <div class="modal-footer">
+        <div class="flex items-center gap-4 text-sm text-gray-600">
+          <span>Lat: <strong id="modal-lat" class="text-gray-900">—</strong></span>
+          <span>Lng: <strong id="modal-lng" class="text-gray-900">—</strong></span>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">คลิกบนแผนที่เพื่อเลือกตำแหน่ง</p>
+        <div class="flex gap-3 mt-3">
+          <button id="btn-confirm-location" class="btn-primary" disabled>
+            <i data-lucide="check" class="w-4 h-4"></i> ยืนยันตำแหน่ง
+          </button>
+          <button id="btn-cancel-location" class="btn-secondary">
+            <i data-lucide="x" class="w-4 h-4"></i> ยกเลิก
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================
+       CONFIRM DIALOG
+       ======================================== -->
+  <div id="confirm-dialog" class="modal-overlay hidden">
+    <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="bg-red-100 rounded-full p-2">
+          <i data-lucide="alert-triangle" class="w-6 h-6 text-red-500"></i>
+        </div>
+        <h3 class="font-semibold text-gray-800">ยืนยันการลบ</h3>
+      </div>
+      <p id="confirm-message" class="text-gray-600 text-sm mb-5">ต้องการลบข้อมูลนี้หรือไม่?</p>
+      <div class="flex gap-3 justify-end">
+        <button id="btn-confirm-cancel" class="btn-secondary text-sm">ยกเลิก</button>
+        <button id="btn-confirm-ok" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">ลบ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================
+       TOAST CONTAINER
+       ======================================== -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-[9999] space-y-3"></div>
+
+  <!-- ========================================
+       LOADING OVERLAY
+       ======================================== -->
+  <div id="loading-overlay" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-[9998] flex items-center justify-center">
+    <div class="bg-white rounded-2xl p-6 shadow-2xl flex items-center gap-4">
+      <div class="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+      <span class="text-gray-700 font-medium">กำลังดำเนินการ...</span>
+    </div>
+  </div>
+
+  <!-- ========================================
+       FOOTER
+       ======================================== -->
+  <footer class="bg-white border-t border-gray-200 py-4 text-center text-sm text-gray-400">
+    © 2026 GIS WQI — ระบบข้อมูลน้ำเสียชุมชน
+  </footer>
+
+  <!-- ========================================
+       SCRIPTS (loading order matters)
+       ======================================== -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/wastewater-source.js"></script>
+  <script src="js/drainage-pipe.js"></script>
+  <script src="js/map-view.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
